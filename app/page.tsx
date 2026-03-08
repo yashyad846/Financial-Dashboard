@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import SmartInput from '@/components/SmartInput';
 // (If that path throws an error, try: import SmartInput from './SmartInput';)
@@ -46,7 +46,7 @@ const spendingData = [
 ]
 
 // Mock data for transactions
-const transactions = [
+const initialTransactions = [
   {
     id: 1,
     date: "Mar 8, 2026",
@@ -100,6 +100,39 @@ const navItems = [
 
 export default function FinanceDashboard() {
   const [activeNav, setActiveNav] = useState("Dashboard")
+  const [transactions, setTransactions] = useState(initialTransactions)
+
+  const handleAddTransaction = (data: any) => {
+    if (!data) return
+
+    const parsedAmount = Number(data.amount)
+    const amount = Number.isFinite(parsedAmount)
+      ? -Math.abs(parsedAmount)
+      : -0
+
+    const parsedDate = data.date ? new Date(data.date) : new Date()
+    const formattedDate = isNaN(parsedDate.getTime())
+      ? new Date().toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : parsedDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+
+    const newTransaction = {
+      id: Date.now(),
+      date: formattedDate,
+      merchant: data.merchant || "Unknown",
+      category: data.category || "Other",
+      amount,
+    }
+
+    setTransactions((prev) => [newTransaction, ...prev])
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -155,7 +188,7 @@ export default function FinanceDashboard() {
           </div>
         </div>
       </aside>
-      <SmartInput />
+      <SmartInput onAddTransaction={handleAddTransaction} />
       {/* Main Content */}
       <main className="flex-1 lg:pl-64">
         {/* Header */}
