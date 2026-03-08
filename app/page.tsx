@@ -146,7 +146,7 @@ export default function FinanceDashboard() {
             </Avatar>
             <div className="flex-1 truncate">
               <p className="text-sm font-medium text-sidebar-foreground">
-                John Doe
+                Yash Yadav
               </p>
               <p className="text-xs text-muted-foreground truncate">
                 john@example.com
