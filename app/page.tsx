@@ -1,7 +1,6 @@
 "use client";
 
-import SmartInput from '@/components/SmartInput';
-// (If that path throws an error, try: import SmartInput from './SmartInput';)
+import SmartInput from "@/components/SmartInput";
 import { useState } from "react"
 import {
   LayoutDashboard,
@@ -101,14 +100,31 @@ const navItems = [
 export default function FinanceDashboard() {
   const [activeNav, setActiveNav] = useState("Dashboard")
   const [transactions, setTransactions] = useState(initialTransactions)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const handleAddTransaction = (data: any) => {
     if (!data) return
 
     const parsedAmount = Number(data.amount)
+    const lowerCategory =
+      typeof data.category === "string"
+        ? data.category.toLowerCase().trim()
+        : ""
+    const lowerMerchant =
+      typeof data.merchant === "string" ? data.merchant.toLowerCase() : ""
+
+    const isIncome =
+      lowerCategory.includes("income") ||
+      lowerMerchant.includes("salary") ||
+      lowerMerchant.includes("income") ||
+      lowerMerchant.includes("deposit") ||
+      lowerMerchant.includes("refund")
+
     const amount = Number.isFinite(parsedAmount)
-      ? -Math.abs(parsedAmount)
-      : -0
+      ? isIncome
+        ? Math.abs(parsedAmount)
+        : -Math.abs(parsedAmount)
+      : 0
 
     const parsedDate = data.date ? new Date(data.date) : new Date()
     const formattedDate = isNaN(parsedDate.getTime())
@@ -133,6 +149,50 @@ export default function FinanceDashboard() {
 
     setTransactions((prev) => [newTransaction, ...prev])
   }
+
+  const filteredTransactions =
+    activeNav === "Transactions" || activeNav === "Dashboard"
+      ? transactions.filter((transaction) => {
+          if (!searchQuery.trim()) return true
+          const query = searchQuery.toLowerCase()
+          return (
+            transaction.merchant.toLowerCase().includes(query) ||
+            transaction.category.toLowerCase().includes(query) ||
+            transaction.date.toLowerCase().includes(query) ||
+            transaction.amount.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+            }).toLowerCase().includes(query)
+          )
+        })
+      : transactions
+
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+
+  const currentMonthTransactions = transactions.filter((transaction) => {
+    const parsed = new Date(transaction.date)
+    if (isNaN(parsed.getTime())) return false
+    return (
+      parsed.getMonth() === currentMonth && parsed.getFullYear() === currentYear
+    )
+  })
+
+  const totalBalance = transactions.reduce(
+    (sum, t) => sum + t.amount,
+    0,
+  )
+
+  const monthlyIncome = currentMonthTransactions.reduce(
+    (sum, t) => (t.amount > 0 ? sum + t.amount : sum),
+    0,
+  )
+
+  const monthlyExpenses = currentMonthTransactions.reduce(
+    (sum, t) => (t.amount < 0 ? sum + Math.abs(t.amount) : sum),
+    0,
+  )
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -188,9 +248,8 @@ export default function FinanceDashboard() {
           </div>
         </div>
       </aside>
-      <SmartInput onAddTransaction={handleAddTransaction} />
       {/* Main Content */}
-      <main className="flex-1 lg:pl-64">
+      <main className="flex-1 lg:pl-64 flex flex-col">
         {/* Header */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-sm">
           <div className="flex items-center gap-4">
@@ -198,7 +257,9 @@ export default function FinanceDashboard() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary lg:hidden">
               <Wallet className="h-4 w-4 text-primary-foreground" />
             </div>
-            <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+            <h1 className="text-xl font-semibold text-foreground">
+              {activeNav}
+            </h1>
           </div>
 
           <div className="flex items-center gap-4">
@@ -207,7 +268,13 @@ export default function FinanceDashboard() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder={
+                  activeNav === "Transactions"
+                    ? "Search transactions..."
+                    : "Quick search..."
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 w-64 rounded-lg border border-border bg-secondary pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
@@ -230,216 +297,421 @@ export default function FinanceDashboard() {
           </div>
         </header>
 
-        {/* Dashboard Content */}
-        <div className="p-6">
-          {/* Summary Cards */}
-          <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {/* Total Balance */}
+        {/* Page Content */}
+        <div className="p-6 space-y-6">
+          {/* Smart natural-language input */}
+          <SmartInput onAddTransaction={handleAddTransaction} />
+
+          {/* Dashboard view */}
+          {activeNav === "Dashboard" && (
+            <>
+              {/* Summary Cards */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {/* Total Balance */}
+                <Card className="border-border bg-card">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Total Balance
+                    </CardTitle>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                      <Wallet className="h-4 w-4 text-primary" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-card-foreground">
+                      {totalBalance.toLocaleString("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      })}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 text-sm">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <span className="text-primary font-medium">+12.5%</span>
+                      <span className="text-muted-foreground">
+                        from last month
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Monthly Income */}
+                <Card className="border-border bg-card">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Monthly Income
+                    </CardTitle>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-chart-1/10">
+                      <ArrowUpRight className="h-4 w-4 text-chart-1" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-card-foreground">
+                      {monthlyIncome.toLocaleString("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      })}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 text-sm">
+                      <TrendingUp className="h-4 w-4 text-chart-1" />
+                      <span className="text-chart-1 font-medium">+8.2%</span>
+                      <span className="text-muted-foreground">
+                        from last month
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Monthly Expenses */}
+                <Card className="border-border bg-card md:col-span-2 lg:col-span-1">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Monthly Expenses
+                    </CardTitle>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-chart-5/10">
+                      <ArrowDownRight className="h-4 w-4 text-chart-5" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-card-foreground">
+                      {monthlyExpenses.toLocaleString("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      })}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 text-sm">
+                      <TrendingDown className="h-4 w-4 text-chart-5" />
+                      <span className="text-chart-5 font-medium">-3.1%</span>
+                      <span className="text-muted-foreground">
+                        from last month
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Spending Chart */}
+              <Card className="border-border bg-card">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold text-card-foreground">
+                      Monthly Spending
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Your spending overview for the year
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border bg-secondary text-foreground"
+                  >
+                    2026
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={spendingData}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="oklch(0.25 0 0)"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="month"
+                          stroke="oklch(0.6 0 0)"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          stroke="oklch(0.6 0 0)"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `$${value}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "oklch(0.14 0 0)",
+                            border: "1px solid oklch(0.25 0 0)",
+                            borderRadius: "8px",
+                            color: "oklch(0.95 0 0)",
+                          }}
+                          labelStyle={{ color: "oklch(0.6 0 0)" }}
+                          formatter={(value: number) => [
+                            `$${value}`,
+                            "Spending",
+                          ]}
+                        />
+                        <Bar
+                          dataKey="amount"
+                          fill="oklch(0.75 0.15 165)"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Recent Transactions */}
+              <Card className="border-border bg-card">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold text-card-foreground">
+                      Recent Transactions
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Your latest financial activity
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border bg-secondary text-foreground"
+                  >
+                    View All
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                            Date
+                          </th>
+                          <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                            Merchant
+                          </th>
+                          <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                            Category
+                          </th>
+                          <th className="py-3 text-right text-sm font-medium text-muted-foreground">
+                            Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTransactions.slice(0, 5).map((transaction) => (
+                          <tr
+                            key={transaction.id}
+                            className="border-b border-border/50 transition-colors hover:bg-secondary/50"
+                          >
+                            <td className="py-4 text-sm text-muted-foreground">
+                              {transaction.date}
+                            </td>
+                            <td className="py-4 text-sm font-medium text-card-foreground">
+                              {transaction.merchant}
+                            </td>
+                            <td className="py-4">
+                              <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                                {transaction.category}
+                              </span>
+                            </td>
+                            <td
+                              className={`py-4 text-right text-sm font-semibold ${
+                                transaction.amount >= 0
+                                  ? "text-chart-1"
+                                  : "text-card-foreground"
+                              }`}
+                            >
+                              {transaction.amount >= 0 ? "+" : ""}
+                              {transaction.amount.toLocaleString("en-US", {
+                                style: "currency",
+                                currency: "USD",
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Transactions view */}
+          {activeNav === "Transactions" && (
             <Card className="border-border bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Balance
-                </CardTitle>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <Wallet className="h-4 w-4 text-primary" />
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-semibold text-card-foreground">
+                    All Transactions
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Filter and explore your full history
+                  </p>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-card-foreground">
-                  $48,352.68
-                </div>
-                <div className="mt-1 flex items-center gap-1 text-sm">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  <span className="text-primary font-medium">+12.5%</span>
-                  <span className="text-muted-foreground">from last month</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Monthly Income */}
-            <Card className="border-border bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Monthly Income
-                </CardTitle>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-chart-1/10">
-                  <ArrowUpRight className="h-4 w-4 text-chart-1" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-card-foreground">
-                  $12,840.00
-                </div>
-                <div className="mt-1 flex items-center gap-1 text-sm">
-                  <TrendingUp className="h-4 w-4 text-chart-1" />
-                  <span className="text-chart-1 font-medium">+8.2%</span>
-                  <span className="text-muted-foreground">from last month</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Monthly Expenses */}
-            <Card className="border-border bg-card md:col-span-2 lg:col-span-1">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Monthly Expenses
-                </CardTitle>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-chart-5/10">
-                  <ArrowDownRight className="h-4 w-4 text-chart-5" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-card-foreground">
-                  $7,234.56
-                </div>
-                <div className="mt-1 flex items-center gap-1 text-sm">
-                  <TrendingDown className="h-4 w-4 text-chart-5" />
-                  <span className="text-chart-5 font-medium">-3.1%</span>
-                  <span className="text-muted-foreground">from last month</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Spending Chart */}
-          <Card className="mb-8 border-border bg-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold text-card-foreground">
-                  Monthly Spending
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Your spending overview for the year
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-border bg-secondary text-foreground"
-              >
-                2026
-                <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={spendingData}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="oklch(0.25 0 0)"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      stroke="oklch(0.6 0 0)"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      stroke="oklch(0.6 0 0)"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => `$${value}`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "oklch(0.14 0 0)",
-                        border: "1px solid oklch(0.25 0 0)",
-                        borderRadius: "8px",
-                        color: "oklch(0.95 0 0)",
-                      }}
-                      labelStyle={{ color: "oklch(0.6 0 0)" }}
-                      formatter={(value: number) => [`$${value}`, "Spending"]}
-                    />
-                    <Bar
-                      dataKey="amount"
-                      fill="oklch(0.75 0.15 165)"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Transactions */}
-          <Card className="border-border bg-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold text-card-foreground">
-                  Recent Transactions
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Your latest financial activity
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-border bg-secondary text-foreground"
-              >
-                View All
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="py-3 text-left text-sm font-medium text-muted-foreground">
-                        Date
-                      </th>
-                      <th className="py-3 text-left text-sm font-medium text-muted-foreground">
-                        Merchant
-                      </th>
-                      <th className="py-3 text-left text-sm font-medium text-muted-foreground">
-                        Category
-                      </th>
-                      <th className="py-3 text-right text-sm font-medium text-muted-foreground">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((transaction) => (
-                      <tr
-                        key={transaction.id}
-                        className="border-b border-border/50 transition-colors hover:bg-secondary/50"
-                      >
-                        <td className="py-4 text-sm text-muted-foreground">
-                          {transaction.date}
-                        </td>
-                        <td className="py-4 text-sm font-medium text-card-foreground">
-                          {transaction.merchant}
-                        </td>
-                        <td className="py-4">
-                          <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                            {transaction.category}
-                          </span>
-                        </td>
-                        <td
-                          className={`py-4 text-right text-sm font-semibold ${
-                            transaction.amount >= 0
-                              ? "text-chart-1"
-                              : "text-card-foreground"
-                          }`}
-                        >
-                          {transaction.amount >= 0 ? "+" : ""}
-                          {transaction.amount.toLocaleString("en-US", {
-                            style: "currency",
-                            currency: "USD",
-                          })}
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                          Date
+                        </th>
+                        <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                          Merchant
+                        </th>
+                        <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                          Category
+                        </th>
+                        <th className="py-3 text-right text-sm font-medium text-muted-foreground">
+                          Amount
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.map((transaction) => (
+                        <tr
+                          key={transaction.id}
+                          className="border-b border-border/50 transition-colors hover:bg-secondary/50"
+                        >
+                          <td className="py-4 text-sm text-muted-foreground">
+                            {transaction.date}
+                          </td>
+                          <td className="py-4 text-sm font-medium text-card-foreground">
+                            {transaction.merchant}
+                          </td>
+                          <td className="py-4">
+                            <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                              {transaction.category}
+                            </span>
+                          </td>
+                          <td
+                            className={`py-4 text-right text-sm font-semibold ${
+                              transaction.amount >= 0
+                                ? "text-chart-1"
+                                : "text-card-foreground"
+                            }`}
+                          >
+                            {transaction.amount >= 0 ? "+" : ""}
+                            {transaction.amount.toLocaleString("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Budget view */}
+          {activeNav === "Budget" && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold text-card-foreground">
+                  Budget Overview
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  High-level look at how your spending compares to your targets.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground">
+                      Essentials
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Groceries, rent, utilities
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    68% of $3,000
+                  </p>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full w-[68%] rounded-full bg-chart-1" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground">
+                      Lifestyle
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Dining out, shopping, travel
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    42% of $1,500
+                  </p>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full w-[42%] rounded-full bg-primary" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground">
+                      Savings & Investments
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Emergency fund, retirement, markets
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    55% of $2,000
+                  </p>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full w-[55%] rounded-full bg-chart-5" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Settings view */}
+          {activeNav === "Settings" && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold text-card-foreground">
+                  Settings
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Personalize how FinanceFlow looks and behaves.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground">
+                      Dark mode
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Uses your system preference (configured via theme).
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
+                    Auto
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground">
+                      Notifications
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Get alerts when you exceed a budget category.
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    Configure
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>
