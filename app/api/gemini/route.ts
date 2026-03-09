@@ -38,11 +38,19 @@ export async function POST(req: Request) {
 
     const aiText = response.text;
     if (!aiText) {
-        throw new Error("No response text from Gemini");
+      throw new Error("No response text from Gemini");
     }
-    
-    // Parse the JSON string from Gemini back into a JavaScript object
-    const extractedData = JSON.parse(aiText);
+
+    // Parse the JSON from Gemini. In most cases `aiText` is a JSON string,
+    // but if the SDK ever returns an object we gracefully fall back.
+    let extractedData: any;
+    try {
+      extractedData =
+        typeof aiText === "string" ? JSON.parse(aiText) : aiText;
+    } catch (e) {
+      console.error("Failed to JSON.parse Gemini output:", aiText, e);
+      throw e;
+    }
 
     return NextResponse.json(extractedData);
 
