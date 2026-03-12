@@ -32,17 +32,30 @@ export default function SmartInput({ onAddTransaction }: { onAddTransaction?: (d
       if (onAddTransaction) {
          onAddTransaction(data);
       }
+      // Determine if it's income based on keywords (same logic as page.tsx)
+      const lowerCat = typeof data.category === 'string' ? data.category.toLowerCase() : '';
+      const lowerMerch = typeof data.merchant === 'string' ? data.merchant.toLowerCase() : '';
+      const isIncome = 
+        lowerCat.includes('income') ||
+        lowerMerch.includes('salary') ||
+        lowerMerch.includes('income') ||
+        lowerMerch.includes('deposit') ||
+        lowerMerch.includes('refund');
+
       setStatus({
         type: "success",
-        message: "Expense added to your transactions.",
+        message: isIncome ? "Income added to your transactions." : "Expense added to your transactions.",
       });
       setInput(''); // Clear the input field
+      // clear the message after 3 seconds
+      setTimeout(() => setStatus(null), 3000);
     } catch (error) {
       console.error(error);
       setStatus({
         type: "error",
         message: "Could not understand that sentence. Please try rephrasing.",
       });
+      setTimeout(() => setStatus(null), 3000);
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +79,7 @@ export default function SmartInput({ onAddTransaction }: { onAddTransaction?: (d
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Describe one expense in a sentence, e.g. “Spent $45 on Uber to the airport today”."
+          placeholder="Describe a transaction, e.g. 'Spent $45 on Uber' or 'Got paid $2000 salary'"
           className="flex-1 px-2 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           disabled={isLoading}
         />
@@ -76,7 +89,7 @@ export default function SmartInput({ onAddTransaction }: { onAddTransaction?: (d
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          {isLoading ? 'Thinking...' : 'Add Expense'}
+          {isLoading ? 'Processing...' : 'Add Transaction'}
         </button>
       </form>
     </div>

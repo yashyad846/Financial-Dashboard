@@ -29,9 +29,13 @@ FinanceFlow is a next-generation personal finance application that replaces tedi
 ## ✨ Core Features
 
 * **🧠 NLP Transaction Parsing:** Utilizes Google's Gemini 2.5 Flash model with strict JSON-enforced system instructions to convert unstructured text into structured financial data.
-* **📊 Interactive Visualizations:** Beautiful, responsive bar charts powered by Recharts to track monthly spending trends.
+* **� Smart Income/Expense Detection:** Automatically classifies transactions as income or expenses based on keywords and amount signs. Shows contextual messages ("Income added" vs "Expense added").
+* **📊 Interactive Multi-Year Visualizations:** Beautiful, responsive bar charts powered by Recharts with year navigation to track spending trends across 2024-2026.
 * **⚡ Optimistic UI Updates:** Instantaneous state management using React hooks ensures the transaction table and charts update with zero server-side latency.
 * **📱 Responsive Design:** A fully mobile-responsive, accessible, and premium UI built with Tailwind CSS and `lucide-react` iconography.
+* **🎨 Color-Coded Categories:** Each transaction category has its own color scheme for quick visual identification (Income: emerald, Food: orange, Transport: blue, etc.).
+* **🔐 Secure Authentication:** Simple login page for user access management.
+* **⚡ Dynamic Status Messages:** Auto-dismissing toast notifications for transaction feedback.
 
 ## 🛠️ Tech Stack
 
@@ -70,3 +74,35 @@ This application utilizes a modern, serverless architecture to securely handle A
 
 ### 👨‍💻 Author
    Yash Yadav
+
+---
+
+## 📋 Recent Improvements (v2.0)
+
+### Enhanced Features
+- **Income/Expense Smart Detection:** Improved classification logic that correctly differentiates between income and expenses based on keywords (salary, deposit, refund, income) and amount signs.
+- **Multi-Year Data API:** New `/api/spending-data` endpoint providing spending data for 2024-2026 with easy year navigation.
+- **Dynamic UI Messaging:** Toast notifications now correctly identify whether a transaction is income or expense, auto-dismissing after 3 seconds.
+- **Color-Coded Transaction Categories:** Each category has its own color scheme for better visual organization.
+- **Login Page:** Professional login interface at `/login` with demo mode support.
+
+### Code Quality Improvements
+- **Type Safety:** Added TypeScript interfaces in `lib/types.ts` for better type checking.
+- **Category Configuration:** Centralized category colors and styling in `lib/categoryConfig.ts`.
+- **Cleaner UI:** Removed search bar and notification icon from header for a more focused interface.
+- **Improved Gemini Prompt:** Updated AI prompt to explicitly recognize income categories and provide better transaction classification.
+
+### Usage Examples
+```bash
+# Income transaction
+"Got paid $2000 salary today"
+→ Shows "Income added" with green badge
+
+# Expense transaction  
+"Spent $45 on Uber to airport"
+→ Shows "Expense added" with red amount
+
+# View different years
+# Use the year navigation arrows on the chart
+# 2024 → 2025 → 2026
+```
