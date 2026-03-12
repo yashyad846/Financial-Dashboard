@@ -1,19 +1,22 @@
 "use client";
 
 import SmartInput from "@/components/SmartInput";
-import { useState } from "react"
+import { getCategoryConfig } from "@/lib/categoryConfig";
+import VisualizationTabs from "@/components/VisualizationTabs";
+import TransactionFilter from "@/components/TransactionFilter";
+import DetailModal from "@/components/DetailModal";
+import Benchmark from "@/components/Benchmark";
+import { useState, useEffect } from "react"
 import {
   LayoutDashboard,
   ArrowUpDown,
+  Target,
   Wallet,
-  Settings,
-  Bell,
-  Search,
   TrendingUp,
   TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
-  ChevronDown,
+  LogOut,
 } from "lucide-react"
 import {
   BarChart,
@@ -27,22 +30,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-// Mock data for the spending chart
-const spendingData = [
-  { month: "Jan", amount: 2400 },
-  { month: "Feb", amount: 1398 },
-  { month: "Mar", amount: 3200 },
-  { month: "Apr", amount: 2780 },
-  { month: "May", amount: 1890 },
-  { month: "Jun", amount: 2390 },
-  { month: "Jul", amount: 3490 },
-  { month: "Aug", amount: 2100 },
-  { month: "Sep", amount: 2700 },
-  { month: "Oct", amount: 3100 },
-  { month: "Nov", amount: 2800 },
-  { month: "Dec", amount: 3600 },
-]
 
 // Mock data for transactions
 const initialTransactions = [
@@ -93,14 +80,56 @@ const initialTransactions = [
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", active: true },
   { icon: ArrowUpDown, label: "Transactions", active: false },
-  { icon: Wallet, label: "Budget", active: false },
-  { icon: Settings, label: "Settings", active: false },
+  { icon: Target, label: "Benchmark", active: false },
 ]
 
 export default function FinanceDashboard() {
   const [activeNav, setActiveNav] = useState("Dashboard")
   const [transactions, setTransactions] = useState(initialTransactions)
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [chartData, setChartData] = useState<Array<{month: string, amount: number}>>([])
+  const [isLoadingChart, setIsLoadingChart] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalData, setModalData] = useState<any>(null)
+  const [modalType, setModalType] = useState<'transaction' | 'summary' | 'category'>('transaction')
+  const [filters, setFilters] = useState({
+    search: '',
+    category: '',
+    amountMin: '',
+    amountMax: '',
+  })
+
+  // Fetch chart data when year changes
+  useEffect(() => {
+    const fetchChartData = async () => {
+      setIsLoadingChart(true)
+      try {
+        const response = await fetch(`/api/spending-data?year=${selectedYear}`)
+        if (response.ok) {
+          const data = await response.json()
+          setChartData(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch chart data:', error)
+      } finally {
+        setIsLoadingChart(false)
+      }
+    }
+
+    fetchChartData()
+  }, [selectedYear])
+
+  // Check user login status
+  useEffect(() => {
+    const userData = localStorage.getItem('user')
+    if (!userData) {
+      window.location.href = '/login'
+    } else {
+      setUser(JSON.parse(userData))
+    }
+  }, [])
 
   const handleAddTransaction = (data: any) => {
     if (!data) return
@@ -113,18 +142,23 @@ export default function FinanceDashboard() {
     const lowerMerchant =
       typeof data.merchant === "string" ? data.merchant.toLowerCase() : ""
 
+    // Determine whether this should be treated as income. We look only at
+    // category/merchant keywords. Amount sign is handled separately when we
+    // normalise the final value, so a positive number won’t automatically
+    // mark something as income (that was causing every entry to become
+    // income).
     const isIncome =
       lowerCategory.includes("income") ||
       lowerMerchant.includes("salary") ||
       lowerMerchant.includes("income") ||
       lowerMerchant.includes("deposit") ||
-      lowerMerchant.includes("refund")
+      lowerMerchant.includes("refund");
 
     const amount = Number.isFinite(parsedAmount)
       ? isIncome
         ? Math.abs(parsedAmount)
         : -Math.abs(parsedAmount)
-      : 0
+      : 0;
 
     const parsedDate = data.date ? new Date(data.date) : new Date()
     const formattedDate = isNaN(parsedDate.getTime())
@@ -153,17 +187,33 @@ export default function FinanceDashboard() {
   const filteredTransactions =
     activeNav === "Transactions" || activeNav === "Dashboard"
       ? transactions.filter((transaction) => {
-          if (!searchQuery.trim()) return true
-          const query = searchQuery.toLowerCase()
-          return (
-            transaction.merchant.toLowerCase().includes(query) ||
-            transaction.category.toLowerCase().includes(query) ||
-            transaction.date.toLowerCase().includes(query) ||
-            transaction.amount.toLocaleString("en-US", {
-              style: "currency",
-              currency: "USD",
-            }).toLowerCase().includes(query)
-          )
+          const query = (filters.search || searchQuery).toLowerCase()
+          const category = filters.category || ''
+          const amountMin = filters.amountMin ? parseFloat(filters.amountMin) : null
+          const amountMax = filters.amountMax ? parseFloat(filters.amountMax) : null
+          
+          // Search filter
+          if (query && !transaction.merchant.toLowerCase().includes(query) &&
+              !transaction.category.toLowerCase().includes(query) &&
+              !transaction.date.toLowerCase().includes(query)) {
+            return false
+          }
+          
+          // Category filter
+          if (category && !transaction.category.toLowerCase().includes(category.toLowerCase())) {
+            return false
+          }
+          
+          // Amount range filter
+          const amount = Math.abs(transaction.amount)
+          if (amountMin !== null && amount < amountMin) {
+            return false
+          }
+          if (amountMax !== null && amount > amountMax) {
+            return false
+          }
+          
+          return true
         })
       : transactions
 
@@ -193,6 +243,28 @@ export default function FinanceDashboard() {
     (sum, t) => (t.amount < 0 ? sum + Math.abs(t.amount) : sum),
     0,
   )
+
+  const handleLogout = () => {
+    localStorage.removeItem('user')
+    window.location.href = '/login'
+  }
+
+  const openTransactionModal = (transaction: any) => {
+    setModalData(transaction)
+    setModalType('transaction')
+    setModalOpen(true)
+  }
+
+  const openSummaryModal = () => {
+    setModalData({
+      totalBalance: totalBalance.toFixed(2),
+      monthlyIncome: monthlyIncome.toFixed(2),
+      monthlyExpenses: monthlyExpenses.toFixed(2),
+      month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    })
+    setModalType('summary')
+    setModalOpen(true)
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -231,7 +303,10 @@ export default function FinanceDashboard() {
         </nav>
 
         {/* User card at bottom */}
-        <div className="border-t border-sidebar-border p-4">
+        <div 
+          className="border-t border-sidebar-border p-4 cursor-pointer hover:bg-sidebar-accent/30 transition-colors"
+          onClick={() => window.location.href = '/login'}
+        >
           <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/50 p-3">
             <Avatar className="h-9 w-9">
               <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=finance" />
@@ -263,37 +338,38 @@ export default function FinanceDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Search */}
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder={
-                  activeNav === "Transactions"
-                    ? "Search transactions..."
-                    : "Quick search..."
-                }
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 w-64 rounded-lg border border-border bg-secondary pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
+            {/* User Info */}
+            {user && (
+              <div className="hidden md:flex items-center gap-2 text-sm">
+                <span className="text-foreground font-medium">{user.name}</span>
+                <span className="text-muted-foreground">•</span>
+              </div>
+            )}
+            
+            {/* User Avatar with Dropdown */}
+            <div className="relative group">
+              <Avatar 
+                className="h-9 w-9 cursor-pointer ring-2 ring-border hover:ring-primary transition-all"
+              >
+                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=finance" />
+                <AvatarFallback>{user?.name?.charAt(0) || 'U'}</AvatarFallback>
+              </Avatar>
+              
+              {/* Dropdown Menu */}
+              <div className="absolute right-0 mt-0 w-48 bg-card border border-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pt-8">
+                <div className="p-3 border-b border-border">
+                  <p className="text-sm font-semibold text-foreground">{user?.name}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
             </div>
-
-            {/* Notifications */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative text-muted-foreground hover:text-foreground"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
-            </Button>
-
-            {/* User Avatar */}
-            <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-border">
-              <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=finance" />
-              <AvatarFallback>JD</AvatarFallback>
-            </Avatar>
           </div>
         </header>
 
@@ -308,7 +384,7 @@ export default function FinanceDashboard() {
               {/* Summary Cards */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Total Balance */}
-                <Card className="border-border bg-card">
+                <Card className="border-border bg-card cursor-pointer hover:shadow-lg transition-shadow" onClick={openSummaryModal}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       Total Balance
@@ -335,7 +411,7 @@ export default function FinanceDashboard() {
                 </Card>
 
                 {/* Monthly Income */}
-                <Card className="border-border bg-card">
+                <Card className="border-border bg-card cursor-pointer hover:shadow-lg transition-shadow" onClick={openSummaryModal}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       Monthly Income
@@ -362,7 +438,7 @@ export default function FinanceDashboard() {
                 </Card>
 
                 {/* Monthly Expenses */}
-                <Card className="border-border bg-card md:col-span-2 lg:col-span-1">
+                <Card className="border-border bg-card cursor-pointer hover:shadow-lg transition-shadow md:col-span-2 lg:col-span-1" onClick={openSummaryModal}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       Monthly Expenses
@@ -397,47 +473,71 @@ export default function FinanceDashboard() {
                       Monthly Spending
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Your spending overview for the year
+                      Your spending overview for {selectedYear}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-border bg-secondary text-foreground"
-                  >
-                    2026
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedYear(selectedYear - 1)}
+                      className="border-border bg-secondary text-foreground"
+                    >
+                      ←
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-border bg-secondary text-foreground min-w-[80px]"
+                      disabled
+                    >
+                      {selectedYear}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedYear(selectedYear + 1)}
+                      className="border-border bg-secondary text-foreground"
+                      disabled={selectedYear === new Date().getFullYear()}
+                    >
+                      →
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={spendingData}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="oklch(0.25 0 0)"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="month"
-                          stroke="oklch(0.6 0 0)"
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis
-                          stroke="oklch(0.6 0 0)"
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(value) => `$${value}`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "oklch(0.14 0 0)",
-                            border: "1px solid oklch(0.25 0 0)",
-                            borderRadius: "8px",
-                            color: "oklch(0.95 0 0)",
+                    {isLoadingChart ? (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
+                        Loading chart data...
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="oklch(0.25 0 0)"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="month"
+                            stroke="oklch(0.6 0 0)"
+                            fontSize={12}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            stroke="oklch(0.6 0 0)"
+                            fontSize={12}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(value) => `$${value}`}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "oklch(0.14 0 0)",
+                              border: "1px solid oklch(0.25 0 0)",
+                              borderRadius: "8px",
+                              color: "oklch(0.95 0 0)",
                           }}
                           labelStyle={{ color: "oklch(0.6 0 0)" }}
                           formatter={(value: number) => [
@@ -452,6 +552,7 @@ export default function FinanceDashboard() {
                         />
                       </BarChart>
                     </ResponsiveContainer>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -507,9 +608,14 @@ export default function FinanceDashboard() {
                               {transaction.merchant}
                             </td>
                             <td className="py-4">
-                              <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                                {transaction.category}
-                              </span>
+                              {(() => {
+                                const config = getCategoryConfig(transaction.category);
+                                return (
+                                  <span className={`inline-flex items-center rounded-full ${config.bgColor} px-2.5 py-0.5 text-xs font-medium ${config.color}`}>
+                                    {transaction.category}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td
                               className={`py-4 text-right text-sm font-semibold ${
@@ -536,183 +642,109 @@ export default function FinanceDashboard() {
 
           {/* Transactions view */}
           {activeNav === "Transactions" && (
-            <Card className="border-border bg-card">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-semibold text-card-foreground">
-                    All Transactions
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Filter and explore your full history
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="py-3 text-left text-sm font-medium text-muted-foreground">
-                          Date
-                        </th>
-                        <th className="py-3 text-left text-sm font-medium text-muted-foreground">
-                          Merchant
-                        </th>
-                        <th className="py-3 text-left text-sm font-medium text-muted-foreground">
-                          Category
-                        </th>
-                        <th className="py-3 text-right text-sm font-medium text-muted-foreground">
-                          Amount
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTransactions.map((transaction) => (
-                        <tr
-                          key={transaction.id}
-                          className="border-b border-border/50 transition-colors hover:bg-secondary/50"
-                        >
-                          <td className="py-4 text-sm text-muted-foreground">
-                            {transaction.date}
-                          </td>
-                          <td className="py-4 text-sm font-medium text-card-foreground">
-                            {transaction.merchant}
-                          </td>
-                          <td className="py-4">
-                            <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                              {transaction.category}
-                            </span>
-                          </td>
-                          <td
-                            className={`py-4 text-right text-sm font-semibold ${
-                              transaction.amount >= 0
-                                ? "text-chart-1"
-                                : "text-card-foreground"
-                            }`}
-                          >
-                            {transaction.amount >= 0 ? "+" : ""}
-                            {transaction.amount.toLocaleString("en-US", {
-                              style: "currency",
-                              currency: "USD",
-                            })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <>
+              <TransactionFilter onFilterChange={setFilters} />
+              
+              <Card className="border-border bg-card">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold text-card-foreground">
+                      All Transactions
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''} found
+                    </p>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {filteredTransactions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No transactions found matching your filters.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                              Date
+                            </th>
+                            <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                              Merchant
+                            </th>
+                            <th className="py-3 text-left text-sm font-medium text-muted-foreground">
+                              Category
+                            </th>
+                            <th className="py-3 text-right text-sm font-medium text-muted-foreground">
+                              Amount
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredTransactions.map((transaction) => (
+                            <tr
+                              key={transaction.id}
+                              className="border-b border-border/50 cursor-pointer transition-colors hover:bg-secondary/50"
+                              onClick={() => openTransactionModal(transaction)}
+                            >
+                              <td className="py-4 text-sm text-muted-foreground">
+                                {transaction.date}
+                              </td>
+                              <td className="py-4 text-sm font-medium text-card-foreground">
+                                {transaction.merchant}
+                              </td>
+                              <td className="py-4">
+                                {(() => {
+                                  const config = getCategoryConfig(transaction.category);
+                                  return (
+                                    <span className={`inline-flex items-center rounded-full ${config.bgColor} px-2.5 py-0.5 text-xs font-medium ${config.color}`}>
+                                      {transaction.category}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td
+                                className={`py-4 text-right text-sm font-semibold ${
+                                  transaction.amount >= 0
+                                    ? "text-chart-1"
+                                    : "text-card-foreground"
+                                }`}
+                              >
+                                {transaction.amount >= 0 ? "+" : ""}
+                                {transaction.amount.toLocaleString("en-US", {
+                                  style: "currency",
+                                  currency: "USD",
+                                })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
           )}
 
-          {/* Budget view */}
-          {activeNav === "Budget" && (
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-card-foreground">
-                  Budget Overview
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  High-level look at how your spending compares to your targets.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-card-foreground">
-                      Essentials
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Groceries, rent, utilities
-                    </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    68% of $3,000
-                  </p>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                  <div className="h-full w-[68%] rounded-full bg-chart-1" />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-card-foreground">
-                      Lifestyle
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Dining out, shopping, travel
-                    </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    42% of $1,500
-                  </p>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                  <div className="h-full w-[42%] rounded-full bg-primary" />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-card-foreground">
-                      Savings & Investments
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Emergency fund, retirement, markets
-                    </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    55% of $2,000
-                  </p>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                  <div className="h-full w-[55%] rounded-full bg-chart-5" />
-                </div>
-              </CardContent>
-            </Card>
+          {/* Visualization Tabs */}
+          {activeNav === "Dashboard" && (
+            <VisualizationTabs data={chartData} />
           )}
 
-          {/* Settings view */}
-          {activeNav === "Settings" && (
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-card-foreground">
-                  Settings
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Personalize how FinanceFlow looks and behaves.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-card-foreground">
-                      Dark mode
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Uses your system preference (configured via theme).
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
-                    Auto
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-card-foreground">
-                      Notifications
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Get alerts when you exceed a budget category.
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Configure
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Benchmark view */}
+          {activeNav === "Benchmark" && (
+            <Benchmark />
           )}
         </div>
+        
+        {/* Detail Modal */}
+        <DetailModal
+          type={modalType}
+          data={modalData}
+          onClose={() => setModalOpen(false)}
+          isOpen={modalOpen}
+        />
       </main>
     </div>
   )
