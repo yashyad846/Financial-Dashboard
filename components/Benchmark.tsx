@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,18 @@ export default function Benchmark({ onOverspend }: BenchmarkProps) {
   const [category, setCategory] = useState('');
   const [limit, setLimit] = useState('');
   const [period, setPeriod] = useState<'daily' | 'monthly'>('monthly');
+
+  // Load goals from localStorage on component mount
+  useEffect(() => {
+    const savedGoals = localStorage.getItem('benchmarkGoals');
+    if (savedGoals) {
+      try {
+        setGoals(JSON.parse(savedGoals));
+      } catch (e) {
+        console.error('Failed to parse saved goals:', e);
+      }
+    }
+  }, []);
 
   const CATEGORIES = [
     'Food', 'Groceries', 'Transport', 'Entertainment', 
