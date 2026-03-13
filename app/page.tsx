@@ -3,6 +3,8 @@
 import SmartInput from "@/components/SmartInput";
 import { getCategoryConfig } from "@/lib/categoryConfig";
 import VisualizationTabs from "@/components/VisualizationTabs";
+import SpendingInsights from "@/components/SpendingInsights";
+import OverspendingAlertModal from "@/components/OverspendingAlertModal";
 import TransactionFilter from "@/components/TransactionFilter";
 import DetailModal from "@/components/DetailModal";
 import Benchmark from "@/components/Benchmark";
@@ -100,6 +102,49 @@ export default function FinanceDashboard() {
     amountMin: '',
     amountMax: '',
   })
+  const [alerts, setAlerts] = useState<Array<{ category: string; spent: number; limit: number; percentage: number }>>([])
+
+  // Calculate alerts from transactions and benchmark goals
+  useEffect(() => {
+    const calculateAlerts = () => {
+      // Calculate spending by category
+      const categorySpending: Record<string, number> = {};
+      transactions.forEach((transaction) => {
+        if (transaction.amount < 0) { // Only count expenses
+          categorySpending[transaction.category] = (categorySpending[transaction.category] || 0) + Math.abs(transaction.amount);
+        }
+      });
+
+      // Load benchmark goals and check for overspending
+      const savedGoals = localStorage.getItem('benchmarkGoals');
+      if (savedGoals) {
+        try {
+          const goals = JSON.parse(savedGoals);
+          const newAlerts: Array<{ category: string; spent: number; limit: number; percentage: number }> = [];
+          
+          goals.forEach((goal: any) => {
+            const spent = categorySpending[goal.category] || 0;
+            const limit = goal.period === 'daily' ? goal.dailyLimit : goal.monthlyLimit;
+            if (limit && spent > limit) {
+              const percentage = Math.round((spent / limit) * 100);
+              newAlerts.push({
+                category: goal.category,
+                spent,
+                limit,
+                percentage,
+              });
+            }
+          });
+          
+          setAlerts(newAlerts);
+        } catch (e) {
+          console.error('Failed to parse goals:', e);
+        }
+      }
+    };
+
+    calculateAlerts();
+  }, [transactions]);
 
   // Fetch chart data when year changes
   useEffect(() => {
@@ -375,12 +420,11 @@ export default function FinanceDashboard() {
 
         {/* Page Content */}
         <div className="p-6 space-y-6">
-          {/* Smart natural-language input */}
-          <SmartInput onAddTransaction={handleAddTransaction} />
-
           {/* Dashboard view */}
           {activeNav === "Dashboard" && (
             <>
+              {/* Smart natural-language input */}
+              <SmartInput onAddTransaction={handleAddTransaction} />
               {/* Summary Cards */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Total Balance */}
@@ -732,6 +776,11 @@ export default function FinanceDashboard() {
             <VisualizationTabs data={chartData} />
           )}
 
+          {/* Spending Insights */}
+          {activeNav === "Dashboard" && (
+            <SpendingInsights transactions={transactions} />
+          )}
+
           {/* Benchmark view */}
           {activeNav === "Benchmark" && (
             <Benchmark />
@@ -745,6 +794,9 @@ export default function FinanceDashboard() {
           onClose={() => setModalOpen(false)}
           isOpen={modalOpen}
         />
+        
+        {/* Overspending Alert Modal */}
+        <OverspendingAlertModal alerts={alerts} />
       </main>
     </div>
   )
