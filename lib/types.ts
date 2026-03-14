@@ -6,6 +6,7 @@ export interface Transaction {
   merchant: string;
   category: string;
   amount: number;
+  verified?: boolean;
 }
 
 export interface ParsedTransaction {
@@ -23,4 +24,15 @@ export interface SpendingDataPoint {
 export interface SpendingDataResponse {
   year: number;
   data: SpendingDataPoint[];
+}
+
+export interface Insight {
+  id: string;
+  text: string;
+  timestamp: string;
+  spendingPercentage: number;
+  month: number;
+  year: number;
+  totalSpent: number;
+  monthlyBudget: number;
 }

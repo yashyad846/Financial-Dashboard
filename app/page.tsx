@@ -8,7 +8,7 @@ import OverspendingAlertModal from "@/components/OverspendingAlertModal";
 import TransactionFilter from "@/components/TransactionFilter";
 import DetailModal from "@/components/DetailModal";
 import Benchmark from "@/components/Benchmark";
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   LayoutDashboard,
   ArrowUpDown,
@@ -19,6 +19,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   LogOut,
+  RefreshCw,
 } from "lucide-react"
 import {
   BarChart,
@@ -32,6 +33,9 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 // Mock data for transactions
 const initialTransactions = [
@@ -41,6 +45,7 @@ const initialTransactions = [
     merchant: "Apple Store",
     category: "Electronics",
     amount: -1299.0,
+    verified: false,
   },
   {
     id: 2,
@@ -48,6 +53,7 @@ const initialTransactions = [
     merchant: "Whole Foods Market",
     category: "Groceries",
     amount: -156.42,
+    verified: false,
   },
   {
     id: 3,
@@ -55,6 +61,7 @@ const initialTransactions = [
     merchant: "Netflix",
     category: "Entertainment",
     amount: -15.99,
+    verified: false,
   },
   {
     id: 4,
@@ -62,6 +69,7 @@ const initialTransactions = [
     merchant: "Salary Deposit",
     category: "Income",
     amount: 8500.0,
+    verified: false,
   },
   {
     id: 5,
@@ -69,6 +77,7 @@ const initialTransactions = [
     merchant: "Uber",
     category: "Transportation",
     amount: -32.5,
+    verified: false,
   },
   {
     id: 6,
@@ -76,6 +85,7 @@ const initialTransactions = [
     merchant: "Amazon",
     category: "Shopping",
     amount: -89.99,
+    verified: false,
   },
 ]
 
@@ -103,6 +113,118 @@ export default function FinanceDashboard() {
     amountMax: '',
   })
   const [alerts, setAlerts] = useState<Array<{ category: string; spent: number; limit: number; percentage: number }>>([])
+  const [monthlyBudget, setMonthlyBudget] = useState(3000)
+  const [showBudgetModal, setShowBudgetModal] = useState(false)
+  const [budgetInput, setBudgetInput] = useState('3000')
+
+  // Load monthly budget from localStorage on mount
+  useEffect(() => {
+    const savedBudget = localStorage.getItem('monthlyBudget');
+    if (savedBudget) {
+      const budget = parseFloat(savedBudget);
+      setMonthlyBudget(budget);
+      setBudgetInput(String(budget));
+    }
+  }, []);
+
+  // Sync verified status from server for each transaction
+  const syncVerifiedStatus = async (transactionIds: number[]) => {
+    if (transactionIds.length === 0) return;
+
+    try {
+      const verifiedMap: Record<number, boolean> = {};
+      let changedCount = 0;
+      
+      // Check verification status for each transaction
+      for (const id of transactionIds) {
+        try {
+          const response = await fetch(`/api/verify-transaction?transactionId=${id}`);
+          if (response.ok) {
+            const data = await response.json();
+            verifiedMap[id] = data.verified;
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error fetching status for transaction ${id}:`, error);
+        }
+      }
+      
+      // Update transactions ONLY if verification status actually changed
+      setTransactions((prev) => {
+        const updated = prev.map((t) => {
+          const newVerified = verifiedMap[t.id];
+          if (newVerified !== undefined && newVerified !== t.verified) {
+            changedCount++;
+            console.log(`✓ Transaction ${t.id} now verified`);
+          }
+          return {
+            ...t,
+            verified: newVerified !== undefined ? newVerified : t.verified,
+          };
+        });
+        
+        if (changedCount > 0) {
+          console.log(`✓ Real-time update: ${changedCount} transaction(s) verified`);
+        }
+        
+        return updated;
+      });
+    } catch (error) {
+      console.error('❌ Failed to sync verified status:', error);
+    }
+  };
+
+  // Manually refresh verification status (for debugging)
+  const handleRefreshVerificationStatus = () => {
+    console.log('🔄 Manual refresh triggered');
+    syncVerifiedStatus(transactions.map((t) => t.id));
+  };
+
+  // Sync verified status once when transactions are loaded
+  const syncedRef = useRef(false);
+  
+  // Effect 1: Initial sync on mount
+  useEffect(() => {
+    if (transactions.length > 0 && !syncedRef.current) {
+      syncedRef.current = true;
+      console.log('📍 Initial sync on mount');
+      syncVerifiedStatus(transactions.map((t) => t.id));
+    }
+  }, [transactions]);
+
+  // Effect 2: Real-time polling for unverified transactions only
+  useEffect(() => {
+    // Only poll if there are unverified transactions
+    const unverifiedIds = transactions
+      .filter((t) => !t.verified)
+      .map((t) => t.id);
+
+    if (unverifiedIds.length === 0) {
+      console.log('✓ All transactions verified, stopping polling');
+      return;
+    }
+
+    console.log(`🔄 Starting real-time polling for ${unverifiedIds.length} unverified transaction(s)`);
+
+    // Poll every 10 seconds for unverified transactions only
+    const pollInterval = setInterval(() => {
+      syncVerifiedStatus(unverifiedIds);
+    }, 10000);
+
+    return () => {
+      clearInterval(pollInterval);
+      console.log('⏸️ Stopped real-time polling');
+    };
+  }, [transactions.map((t) => !t.verified).join(',')]); // Re-setup when verified status changes
+
+  // Save monthly budget to localStorage
+  const handleSaveBudget = () => {
+    const budget = parseFloat(budgetInput);
+    if (!isNaN(budget) && budget > 0) {
+      setMonthlyBudget(budget);
+      localStorage.setItem('monthlyBudget', String(budget));
+      setShowBudgetModal(false);
+    }
+  };
 
   // Calculate alerts from transactions and benchmark goals
   useEffect(() => {
@@ -224,7 +346,18 @@ export default function FinanceDashboard() {
       merchant: data.merchant || "Unknown",
       category: data.category || "Other",
       amount,
+      verified: false,
     }
+
+    // Call the API to save transaction and trigger automation
+    fetch('/api/add-transaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTransaction),
+    }).catch((error) => {
+      console.error('Failed to trigger automation:', error);
+      // Continue even if automation fails - the transaction is still added locally
+    });
 
     setTransactions((prev) => [newTransaction, ...prev])
   }
@@ -383,6 +516,25 @@ export default function FinanceDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Refresh Verification Status Button */}
+            <button
+              onClick={handleRefreshVerificationStatus}
+              className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-foreground bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors"
+              title="Refresh transaction verification status from server"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Sync Status
+            </button>
+
+            {/* Budget Button */}
+            <button
+              onClick={() => setShowBudgetModal(true)}
+              className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-foreground bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
+            >
+              <Target className="h-4 w-4" />
+              Budget: ${monthlyBudget.toFixed(2)}
+            </button>
+
             {/* User Info */}
             {user && (
               <div className="hidden md:flex items-center gap-2 text-sm">
@@ -616,6 +768,7 @@ export default function FinanceDashboard() {
                     variant="outline"
                     size="sm"
                     className="border-border bg-secondary text-foreground"
+                    onClick={() => setActiveNav("Transactions")}
                   >
                     View All
                   </Button>
@@ -636,6 +789,9 @@ export default function FinanceDashboard() {
                           </th>
                           <th className="py-3 text-right text-sm font-medium text-muted-foreground">
                             Amount
+                          </th>
+                          <th className="py-3 text-center text-sm font-medium text-muted-foreground">
+                            Status
                           </th>
                         </tr>
                       </thead>
@@ -673,6 +829,17 @@ export default function FinanceDashboard() {
                                 style: "currency",
                                 currency: "USD",
                               })}
+                            </td>
+                            <td className="py-4 text-center">
+                              {transaction.verified ? (
+                                <span className="inline-flex items-center rounded-full bg-green-100/20 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                                  ✓ Verified
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-gray-100/20 px-2.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-900/20 dark:text-gray-400">
+                                  Pending
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -722,6 +889,9 @@ export default function FinanceDashboard() {
                             <th className="py-3 text-right text-sm font-medium text-muted-foreground">
                               Amount
                             </th>
+                            <th className="py-3 text-center text-sm font-medium text-muted-foreground">
+                              Status
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -760,6 +930,17 @@ export default function FinanceDashboard() {
                                   currency: "USD",
                                 })}
                               </td>
+                              <td className="py-4 text-center">
+                                {transaction.verified ? (
+                                  <span className="inline-flex items-center rounded-full bg-green-100/20 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                                    ✓ Verified
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full bg-gray-100/20 px-2.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-900/20 dark:text-gray-400">
+                                    Pending
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -797,6 +978,46 @@ export default function FinanceDashboard() {
         
         {/* Overspending Alert Modal */}
         <OverspendingAlertModal alerts={alerts} />
+
+        {/* Monthly Budget Modal */}
+        <Dialog open={showBudgetModal} onOpenChange={setShowBudgetModal}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Set Monthly Budget</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="budget-input" className="text-right">
+                  Budget
+                </Label>
+                <Input
+                  id="budget-input"
+                  type="number"
+                  placeholder="3000"
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  className="col-span-3"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Current budget: ${monthlyBudget.toFixed(2)}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowBudgetModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveBudget}>
+                Save Budget
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )
