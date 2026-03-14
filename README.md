@@ -70,25 +70,12 @@ This application utilizes a modern, serverless architecture to securely handle A
    ```bash
    npm run dev
 
-### 👨‍💻 Author
-   Yash Yadav
-
----
-
-## 📋 Recent Improvements (v2.0)
-
 ### Enhanced Features
 - **Income/Expense Smart Detection:** Improved classification logic that correctly differentiates between income and expenses based on keywords (salary, deposit, refund, income) and amount signs.
 - **Multi-Year Data API:** New `/api/spending-data` endpoint providing spending data for 2024-2026 with easy year navigation.
 - **Dynamic UI Messaging:** Toast notifications now correctly identify whether a transaction is income or expense, auto-dismissing after 3 seconds.
 - **Color-Coded Transaction Categories:** Each category has its own color scheme for better visual organization.
 - **Login Page:** Professional login interface at `/login` with demo mode support.
-
-### Code Quality Improvements
-- **Type Safety:** Added TypeScript interfaces in `lib/types.ts` for better type checking.
-- **Category Configuration:** Centralized category colors and styling in `lib/categoryConfig.ts`.
-- **Cleaner UI:** Removed search bar and notification icon from header for a more focused interface.
-- **Improved Gemini Prompt:** Updated AI prompt to explicitly recognize income categories and provide better transaction classification.
 
 ### Usage Examples
 ```bash
@@ -104,3 +91,8 @@ This application utilizes a modern, serverless architecture to securely handle A
 # Use the year navigation arrows on the chart
 # 2024 → 2025 → 2026
 ```
+
+### 👨‍💻 Author
+   Yash Yadav
+
+---
