@@ -138,6 +138,7 @@ export default function LoginPage() {
       const userData = {
         email,
         name,
+        password,
         loginTime: new Date().toISOString()
       };
 

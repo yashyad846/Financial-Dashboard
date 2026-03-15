@@ -5,6 +5,7 @@ import { Transaction } from '@/lib/types';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    console.log('[DEBUG] Raw request body:', JSON.stringify(body));
 
     // Validate required fields
     if (!body.amount || !body.merchant || !body.category || !body.date) {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('Error in add-transaction route:', error);
     return NextResponse.json(
-      { error: 'Failed to process transaction' },
+      { error: 'Failed to process transaction', stack: (error as any).stack },
       { status: 500 }
     );
   }

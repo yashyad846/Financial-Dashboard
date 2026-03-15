@@ -8,7 +8,7 @@ import OverspendingAlertModal from "@/components/OverspendingAlertModal";
 import TransactionFilter from "@/components/TransactionFilter";
 import DetailModal from "@/components/DetailModal";
 import Benchmark from "@/components/Benchmark";
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import {
   LayoutDashboard,
   ArrowUpDown,
@@ -99,6 +99,7 @@ export default function FinanceDashboard() {
   const [activeNav, setActiveNav] = useState("Dashboard")
   const [transactions, setTransactions] = useState(initialTransactions)
   const [searchQuery, setSearchQuery] = useState("")
+  // TODO: fix this to use proper data fetching
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [chartData, setChartData] = useState<Array<{month: string, amount: number}>>([])
   const [isLoadingChart, setIsLoadingChart] = useState(false)
@@ -179,42 +180,8 @@ export default function FinanceDashboard() {
     syncVerifiedStatus(transactions.map((t) => t.id));
   };
 
-  // Sync verified status once when transactions are loaded
-  const syncedRef = useRef(false);
-  
-  // Effect 1: Initial sync on mount
-  useEffect(() => {
-    if (transactions.length > 0 && !syncedRef.current) {
-      syncedRef.current = true;
-      console.log('📍 Initial sync on mount');
-      syncVerifiedStatus(transactions.map((t) => t.id));
-    }
-  }, [transactions]);
-
-  // Effect 2: Real-time polling for unverified transactions only
-  useEffect(() => {
-    // Only poll if there are unverified transactions
-    const unverifiedIds = transactions
-      .filter((t) => !t.verified)
-      .map((t) => t.id);
-
-    if (unverifiedIds.length === 0) {
-      console.log('✓ All transactions verified, stopping polling');
-      return;
-    }
-
-    console.log(`🔄 Starting real-time polling for ${unverifiedIds.length} unverified transaction(s)`);
-
-    // Poll every 10 seconds for unverified transactions only
-    const pollInterval = setInterval(() => {
-      syncVerifiedStatus(unverifiedIds);
-    }, 10000);
-
-    return () => {
-      clearInterval(pollInterval);
-      console.log('⏸️ Stopped real-time polling');
-    };
-  }, [transactions.map((t) => !t.verified).join(',')]); // Re-setup when verified status changes
+  // Removed automatic syncing - now only happens when user clicks "Sync Status" button
+  // This respects the 15 requests per minute rate limit
 
   // Save monthly budget to localStorage
   const handleSaveBudget = () => {
@@ -796,17 +763,15 @@ export default function FinanceDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTransactions.slice(0, 5).map((transaction) => (
+                        {filteredTransactions.slice(0, 5).map((transaction, index) => (
                           <tr
-                            key={transaction.id}
+                            key={index}
                             className="border-b border-border/50 transition-colors hover:bg-secondary/50"
                           >
                             <td className="py-4 text-sm text-muted-foreground">
                               {transaction.date}
                             </td>
-                            <td className="py-4 text-sm font-medium text-card-foreground">
-                              {transaction.merchant}
-                            </td>
+                            <td className="py-4 text-sm font-medium text-card-foreground" dangerouslySetInnerHTML={{ __html: transaction.merchant }} />
                             <td className="py-4">
                               {(() => {
                                 const config = getCategoryConfig(transaction.category);

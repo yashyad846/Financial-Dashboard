@@ -62,8 +62,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json(extractedData);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return NextResponse.json({ error: "Failed to process expense" }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Failed to process expense",
+      details: error.message,
+      apiKeyHint: process.env.GEMINI_API_KEY?.substring(0, 8) + '...',
+    }, { status: 500 });
   }
 }

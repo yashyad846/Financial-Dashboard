@@ -6,15 +6,7 @@ import { Transaction } from './types';
  * @throws Error if webhook URL is not configured or request fails
  */
 export async function triggerAutomation(transaction: Transaction): Promise<void> {
-  const webhookUrl = process.env.N8N_WEBHOOK_URL;
-
-  // Validate that the webhook URL is configured
-  if (!webhookUrl) {
-    console.error(
-      'N8N_WEBHOOK_URL environment variable is not configured. Automation trigger skipped.'
-    );
-    return;
-  }
+  const webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/financeflow';
 
   try {
     const payload = {
@@ -26,6 +18,7 @@ export async function triggerAutomation(transaction: Transaction): Promise<void>
       timestamp: new Date().toISOString(),
     };
 
+    console.log('[Automation] Sending payload:', JSON.stringify(payload));
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
