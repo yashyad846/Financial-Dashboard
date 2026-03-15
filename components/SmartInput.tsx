@@ -7,6 +7,7 @@ export default function SmartInput({ onAddTransaction }: { onAddTransaction?: (d
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const DEBUG = true;  // eslint-disable-line
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +63,7 @@ export default function SmartInput({ onAddTransaction }: { onAddTransaction?: (d
   };
 
   return (
-    <div className="w-full rounded-xl border border-border bg-secondary px-4 py-3 shadow-sm space-y-2">
+    <div className="w-full rounded-xl border border-border bg-secondary px-4 py-3 shadow-sm space-y-2" style={{ marginBottom: '4px' }}>
       {status && (
         <div
           className={`text-xs rounded-md px-3 py-2 ${
